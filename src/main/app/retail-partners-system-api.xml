@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <flow name="post:/partners:application/json:api-config">
+        <set-property propertyName="Content-Type" value="application/json" doc:name="application/json"/>
+        <dw:transform-message doc:name="save input">
+            <dw:set-variable variableName="input"><![CDATA[%dw 1.0
+%output application/java
+---
+payload]]></dw:set-variable>
+        </dw:transform-message>
+        <set-variable variableName="partnerId" value="#[java.util.UUID.randomUUID().toString()]" doc:name="generate ID"/>
+        <dw:transform-message doc:name="prepare for INSERT">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	partnerId:     flowVars.partnerId,
+	name:          payload.name,
+	description:   payload.description,
+	email:         payload.email,
+	phone:         payload.phone,
+	url:           payload.url,
+	shippingPrice: payload.shippingPrice,
+	rating:        payload.rating
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <db:insert config-ref="mysql" doc:name="INSERT partner">
+            <db:parameterized-query><![CDATA[INSERT INTO Partner
+(partnerId,
+name,
+description,
+email,
+phone,
+url,
+shippingPrice,
+rating)
+VALUES
+(#[payload.partnerId],
+#[payload.name],
+#[payload.description],
+#[payload.email],
+#[payload.phone],
+#[payload.url],
+#[payload.shippingPrice],
+#[payload.rating]);]]></db:parameterized-query>
+        </db:insert>
+        <dw:transform-message doc:name="show created resource">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{partnerId: flowVars.partnerId} ++ flowVars.input]]></dw:set-payload>
+            <dw:set-property propertyName="Location"><![CDATA[%dw 1.0
+%output application/java
+---
+"$(inboundProperties.'http.scheme')://" ++
+inboundProperties.host ++ inboundProperties."http.relative.path" ++ 
+"/$(flowVars.partnerId)"]]></dw:set-property>
+        </dw:transform-message>
+    </flow>
+    
+    <flow name="put:/partners/{partnerId}:application/json:api-config">
+        <dw:transform-message doc:name="save input">
+            <dw:set-variable variableName="input"><![CDATA[%dw 1.0
+%output application/java
+---
+payload]]></dw:set-variable>
+        </dw:transform-message>
+        <dw:transform-message doc:name="prepare for UPDATE">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+using (partner = flowVars.input)
+{
+	name:          partner.name,
+	description:   partner.description,
+	email:         partner.email,
+	phone:         partner.phone,
+	url:           partner.url,
+	shippingPrice: partner.shippingPrice
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <db:update config-ref="mysql" doc:name="UPDATE partner">
+            <db:parameterized-query><![CDATA[UPDATE Partner SET 
+
+name = #[payload.name],
+description = #[payload.description],
+email = #[payload.email],
+phone = #[payload.phone],
+url = #[payload.url],
+shippingPrice = #[payload.shippingPrice]
+
+WHERE partnerId = #[flowVars.partnerId];]]></db:parameterized-query>
+        </db:update>
+        <choice doc:name="Partner found and updated?">
+            <when expression="#[payload == 1]">
+                <dw:transform-message doc:name="show new representation">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+flowVars.input]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <dw:transform-message doc:name="404 Not Found">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	"message": "Resource not found!"
+}]]></dw:set-payload>
+                    <dw:set-property propertyName="http.status"><![CDATA[%dw 1.0
+%output application/java
+---
+404]]></dw:set-property>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="get:/partners:api-config">
+        <dw:transform-message doc:name="save search criteria to var query">
+            <dw:set-variable variableName="query"><![CDATA[%dw 1.0
+%output application/java
+---
+inboundProperties."http.query.params"]]></dw:set-variable>
+        </dw:transform-message>
+        <logger message="#[flowVars.query]" level="INFO" doc:name="Logger"/>
+        <choice doc:name="Search type">
+            <when expression="#[flowVars.query.name != null]">
+                <db:select config-ref="mysql" doc:name="SELECT by name">
+                    <db:parameterized-query><![CDATA[SELECT * FROM Partner WHERE name LIKE '%' + #[flowVars.query.name] + '%';]]></db:parameterized-query>
+                </db:select>
+                <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+                <dw:transform-message doc:name="Transform to JSON array">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	searchCriteria: {
+	  	name: flowVars.query.name
+	},
+	results: payload map ( (partner) ->
+		{
+			partnerId:   partner.partnerId,
+			name:        partner.name,
+			description: partner.description,
+			email:       partner.email,
+			phone:       partner.phone,
+			url:         partner.url,
+			shippingPrice: partner.shippingPrice,
+			rating:      partner.rating
+		}
+	)
+}
+]]></dw:set-payload>
+                </dw:transform-message>
+                <logger message="#[message.payloadAs(java.lang.String)]" level="INFO" doc:name="Logger"/>
+            </when>
+            <otherwise>
+                <logger level="INFO" doc:name="Logger"/>
+                <db:select config-ref="mysql" doc:name="SELECT without criteria">
+                    <db:parameterized-query><![CDATA[SELECT * FROM Partner;]]></db:parameterized-query>
+                </db:select>
+                <dw:transform-message doc:name="Transform to JSON array">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	searchCriteria: {
+		name: null
+	},
+	results: payload map ( (partner) ->
+		{
+			partnerId: partner.partnerId,
+			name: partner.name,
+			description: partner.description,
+			email: partner.email,
+			phone: partner.phone,
+			url: partner.url,
+			shippingPrice: partner.shippingPrice,
+			rating: partner.rating
+		}
+	)
+}
+	]]></dw:set-payload>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="get:/partners/{partnerId}:api-config">
+        <db:select config-ref="mysql" doc:name="SELECT partner by Id">
+            <db:parameterized-query><![CDATA[SELECT * FROM Partner WHERE partnerId = #[flowVars.partnerId]]]></db:parameterized-query>
+        </db:select>
+        <choice doc:name="Found?">
+            <when expression="#[!payload.isEmpty()]">
+                <dw:transform-message doc:name="Transform to JSON map">
+                    <dw:input-payload mimeType="application/java"/>
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+using(partner = payload[0])
+{
+	partnerId:     partner.partnerId,
+	name:          partner.name,
+	description:   partner.description,
+	email:         partner.email,
+	phone:         partner.phone,
+	url:           partner.url,
+	shippingPrice: partner.shippingPrice,
+	rating:        partner.rating
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <dw:transform-message doc:name="404 Not Found">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	"message": "Resource not found!"
+}]]></dw:set-payload>
+                    <dw:set-property propertyName="http.status"><![CDATA[%dw 1.0
+%output application/java
+---
+404]]></dw:set-property>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+    </flow>
+    
+    <flow name="get:/productSearch:api-config">
+        <dw:transform-message doc:name="save search criteria to var query">
+            <dw:set-variable variableName="query"><![CDATA[%dw 1.0
+%output application/java
+---
+inboundProperties."http.query.params"]]></dw:set-variable>
+        </dw:transform-message>
+        <db:select config-ref="mysql" doc:name="SELECT by productId, variantId and quantity only">
+            <db:parameterized-query><![CDATA[SELECT partner.*, product.productPrice, product.taxPrice, pp.availableCount 
+FROM Partner as partner 
+	INNER JOIN Partner_Product as pp ON (partner.partnerId=pp.Partner_partnerId) 
+	INNER JOIN Product as product ON (pp.Product_productId=product.productId AND pp.Product_variantId = product.variantId)
+WHERE product.productId = #[flowVars.query.productId] 
+	AND product.variantId = #[flowVars.query.variantId] 
+	AND pp.availableCount >= #[flowVars.query.quantity]
+LIMIT 100;]]></db:parameterized-query>
+        </db:select>
+        <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+        <dw:transform-message doc:name="Transform to JSON array">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	searchCriteria: {
+		productId: flowVars.query.productId,
+		productVariant: flowVars.query.variantId,
+		quantity: flowVars.query.quantity as :number
+	},
+	results: payload map ( (result) ->
+		{
+			quantityInStock: result.availableCount,
+			productPrice:    result.productPrice,
+			tax:             result.taxPrice,
+			partnerInfo: {
+				partnerId:        result.partnerId,
+				name:             result.name,
+				description:      result.description,
+				email:            result.email,
+				phone:            result.phone,
+				url:         	  result.url,
+				shippingPrice:    result.shippingPrice,
+				rating:           result.rating
+			}
+		}
+	)
+}
+
+
+
+
+]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+    <flow name="post:/reservation:application/json:api-config">
+        <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+        <set-payload value="{&#xA;  &quot;message&quot;: &quot;Product was reserved&quot; &#xA;}" doc:name="Set Payload"/>
+    </flow>
+    
+</mule>

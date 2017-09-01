@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:db="http://www.mulesoft.org/schema/mule/db"
 	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:partner-manager="http://www.mulesoft.org/schema/mule/partner-manager" xmlns:as2="http://www.mulesoft.org/schema/mule/as2" xmlns:x12-edi="http://www.mulesoft.org/schema/mule/x12-edi" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
 http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
 http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/as2 http://www.mulesoft.org/schema/mule/as2/current/mule-as2.xsd
+http://www.mulesoft.org/schema/mule/x12-edi http://www.mulesoft.org/schema/mule/x12-edi/current/mule-x12-edi.xsd
+http://www.mulesoft.org/schema/mule/partner-manager http://www.mulesoft.org/schema/mule/partner-manager/current/mule-partner-manager.xsd
 http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
 http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
 http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
@@ -289,8 +292,71 @@ LIMIT 100;]]></db:parameterized-query>
         </dw:transform-message>
     </flow>
     <flow name="post:/reservation:application/json:api-config">
-        <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
-        <set-payload value="{&#xA;  &quot;message&quot;: &quot;Product was reserved&quot; &#xA;}" doc:name="Set Payload"/>
+        <set-property propertyName="Content-Type" value="application/json" doc:name="application/json"/>
+        <choice doc:name="Choice">
+            <when expression="#[dw(&quot;payload.partnerId&quot;) == &quot;${partner.a.id}&quot;]">
+                <dw:transform-message doc:name="Prepare Document">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%type tobd = :number { class: "java.math.BigDecimal" }
+%output application/java
+---
+{
+	TransactionSets: {
+		v005010: {
+			"850": [{
+				Heading: {
+				Name: payload.Name,
+					"0200_BEG": {
+						BEG01: "00",
+						BEG02: "NE",
+						BEG03: (random * 10000) as :string {format: "##"},
+						BEG05: now as :date
+					},
+					"3100_N1_Loop": [{
+						"3400_N4": [{
+							N401: payload.address.city,
+							N402: payload.address.state,
+							N403: payload.address.postalCode,
+							N404: payload.address.country
+						}]
+					}]
+				},
+				Detail: {
+					"0100_PO1_Loop": [ {
+						"0100_PO1": {
+							PO102: payload.quantity as :tobd,
+							PO104: payload.price as :tobd,
+							PO107: payload.productId
+						}
+					} ]
+				},
+				Summary: {
+					"0100_CTT_Loop": {
+						"0200_AMT": {
+							AMT01: "TT",
+							AMT02: payload.price as :tobd
+						}
+					}
+				}
+			}]
+		}
+	}
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <x12-edi:write config-ref="X12_EDI" doc:name="Write 850"/>
+                <as2:send config-ref="send-customer-as2-config" contentType="application/edi-x12" as2From="${as2.customer.id}" as2To="${as2.mock-supplier.id}" doc:name="Send 850 to Supplier"/>
+            </when>
+            <otherwise>
+                <logger message="Reservation has an unknown Partner ID" level="ERROR" doc:name="Partner unknown"/>
+            </otherwise>
+        </choice>
+        <set-payload value="{&#xA;  &quot;message&quot;: &quot;Product was reserved&quot; &#xA;}" doc:name="Set ACK response"/>
     </flow>
+    
+    <flow name="receive-997-from-supplier-flow">
+        <as2:receive config-ref="receive-customer-as2-config" doc:name="Receive 997 from Supplier" requireSenderAs2From="BestAmazing" requireSenderAs2To="AnypointStore"/>
+        <x12-edi:read config-ref="X12_EDI" doc:name="Parse 997"/>
+    </flow>
+    
     
 </mule>

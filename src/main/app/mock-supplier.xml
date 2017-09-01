@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:x12-edi="http://www.mulesoft.org/schema/mule/x12-edi" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:as2="http://www.mulesoft.org/schema/mule/as2" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/as2 http://www.mulesoft.org/schema/mule/as2/current/mule-as2.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/x12-edi http://www.mulesoft.org/schema/mule/x12-edi/current/mule-x12-edi.xsd">
+    <as2:config name="receive-supplier-as2-config" httpEndpointRef="receive-supplier-http-endpoint" doc:name="AS2"/>
+    <http:endpoint exchange-pattern="request-response"   method="POST" name="receive-supplier-http-endpoint" doc:name="HTTP" host="${as2.mock-supplier.receive.http.host}" port="${as2.mock-supplier.receive.http.port}"/>
+    <as2:config name="send-supplier-as2-config" httpEndpointRef="send-supplier-http-endpoint" doc:name="AS2"/>
+    <http:endpoint exchange-pattern="request-response"   method="POST" name="send-supplier-http-endpoint" doc:name="HTTP" host="${as2.mock-supplier.send.http.host}" port="${as2.mock-supplier.send.http.port}"/>
+    <x12-edi:config name="supplier-x12-edi" doc:name="X12 EDI">
+        <x12-edi:schemas>
+            <x12-edi:schema>/x12/005010/850.esl</x12-edi:schema>
+        </x12-edi:schemas>
+    </x12-edi:config>
+    <flow name="receive-850-from-customer-flow">
+        <as2:receive config-ref="receive-supplier-as2-config" doc:name="Receive 850 from Customer" requireSenderAs2From="${as2.customer.id}" requireSenderAs2To="${as2.mock-supplier.id}"/>
+        <x12-edi:read config-ref="supplier-x12-edi" doc:name="Parse 850"/>
+        <set-payload value="#[ ['TransactionSets' : [ 'v005010' : [ '997' : payload.FunctionalAcksGenerated ] ] ] ]" doc:name="Extract Canonical 997"/>
+        <x12-edi:write config-ref="supplier-x12-edi" doc:name="Write 997"/>
+        <as2:send config-ref="send-supplier-as2-config" as2From="${as2.mock-supplier.id}" as2To="${as2.customer.id}" contentType="application/edi-x12" doc:name="Send 997 to Customer"/>
+    </flow>
+</mule>

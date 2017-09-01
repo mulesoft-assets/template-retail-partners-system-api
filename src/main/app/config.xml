@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:context="http://www.springframework.org/schema/context" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+<mule xmlns:partner-manager="http://www.mulesoft.org/schema/mule/partner-manager"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:as2="http://www.mulesoft.org/schema/mule/as2" xmlns:x12-edi="http://www.mulesoft.org/schema/mule/x12-edi" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:context="http://www.springframework.org/schema/context" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/partner-manager http://www.mulesoft.org/schema/mule/partner-manager/current/mule-partner-manager.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/as2 http://www.mulesoft.org/schema/mule/as2/current/mule-as2.xsd
+http://www.mulesoft.org/schema/mule/x12-edi http://www.mulesoft.org/schema/mule/x12-edi/current/mule-x12-edi.xsd
 http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
 http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
 http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
@@ -13,6 +17,24 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
     
     <db:mysql-config name="mysql" host="${db.host}" port="${db.port}" user="${db.user}" password="${db.password}" database="${db.database}" doc:name="MySQL Configuration"/>
     
+    <x12-edi:config name="X12_EDI" doc:name="X12 EDI" useB2BProvider="true" groupIdPartner="${x12.mock-supplier.id}" groupIdSelf="${x12.customer.id}" interchangeIdPartner="${x12.mock-supplier.id}" interchangeIdQualifierPartner="${x12.mock-supplier.interchange.id}" interchangeIdQualifierSelf="${x12.customer.interchange.id}" interchangeIdSelf="${x12.customer.id}">
+		<x12-edi:schemas>
+			<x12-edi:schema>/x12/005010/850.esl</x12-edi:schema>
+        </x12-edi:schemas>			
+    </x12-edi:config>
+    
+    <as2:partner-manager-config name="send-customer-as2-config" httpEndpointRef="send-customer-http-endpoint" standard="X12" doc:name="send-customer-as2-config"/>
+    <http:endpoint exchange-pattern="request-response" host="${as2.customer.send.http.host}" port="${as2.customer.send.http.port}" method="POST" name="send-customer-http-endpoint" doc:name="send-customer-http-endpoint" connector-ref="HTTP_HTTPS"/>
+    <as2:partner-manager-config name="receive-customer-as2-config" httpEndpointRef="receive-customer-http-endpoint" standard="X12" doc:name="AS2"/>
+    <http:endpoint exchange-pattern="request-response" host="${as2.customer.receive.http.host}" port="${as2.customer.receive.http.port}" method="POST" name="receive-customer-http-endpoint" doc:name="receive-customer-http-endpoint" connector-ref="HTTP_HTTPS"/>
+    <http:connector name="HTTP_HTTPS" cookieSpec="netscape" validateConnections="true" sendBufferSize="0" receiveBufferSize="0" receiveBacklog="0" clientSoTimeout="10000" serverSoTimeout="10000" socketSoLinger="0" doc:name="HTTP-HTTPS"/>
+    <partner-manager:config-file-storage-amazon-s3
+        name="Partner_Manager__Amazon_S3_File_Storage" accessKeyId="${s3.accessKeyId}"
+        secretKey="${s3.secretKey}" bucketName="${s3.bucketName}" region="${s3.region}"
+        apiKey="${pmc.apiKey}" tpmServiceAddress="${pmc.tpmServiceAddress}"
+        trackerAddress="${pmc.trackerAddress}" environmentId="${pmc.environmentId}"
+        doc:name="Partner Manager: Amazon S3 File Storage" />
+
     <context:property-placeholder location="common.properties,mule.${mule.env}.properties"/>
     
 </mule>

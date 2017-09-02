@@ -304,8 +304,8 @@ LIMIT 100;]]></db:parameterized-query>
 	TransactionSets: {
 		v005010: {
 			"850": [{
+				Name: payload.name,
 				Heading: {
-				Name: payload.Name,
 					"0200_BEG": {
 						BEG01: "00",
 						BEG02: "NE",

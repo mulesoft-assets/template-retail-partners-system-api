@@ -19,7 +19,9 @@ Please review the terms of the license before downloading and using this templat
 
 # Use Case <a name="usecase"/>
 
-This API is part of Retail Catalyst and serves to get information about Partners and their products. It allows to check the available items and also makes reservations.
+This API is part of Retail Catalyst and serves to get information about Partners and their products. It allows to check the available items and also makes reservations through Partners configured using Anypoint Partners Manager.
+
+More information about Anypoint Partners Manager is available [here](https://docs.mulesoft.com/anypoint-b2b/anypoint-partner-manager).
 
 Please, have a look at the provided RAML file (in folder src/main/api) to see what operations are available.
 
@@ -88,3 +90,42 @@ Detailed list with examples:
 + db.user `username`
 + db.password `password`
 + db.database `dbname`
+
+### B2B Partner Manager properties
+
++ partner.a.id `e3159004-08f3-49cc-bf5e-4399ece93ef1`
+
++ pmc.environmentId `31194b75-c1de-4349-ad00-52466f86f0ad`
++ pmc.apiKey `2e78dd042a694e159344b3b5c2932ca5`
++ pmc.trackerAddress `https://anypoint.mulesoft.com/b2b/tracker/api`
++ pmc.tpmServiceAddress `https://anypoint.mulesoft.com/b2b/tpm/api`
++ pmc.host `anypoint.mulesoft.com`
+
++ as2.customer.id `AnypointStore`
+
++ as2.customer.receive.http.host `localhost`
++ as2.customer.receive.http.port `8084`
+
++ as2.customer.send.http.host `localhost`
++ as2.customer.send.http.port `8085`
+
++ as2.mock-supplier.id `BestAmazing`
+
++ as2.mock-supplier.receive.http.host `localhost`
++ as2.mock-supplier.receive.http.port `8085`
+
++ as2.mock-supplier.send.http.host `localhost`
++ as2.mock-supplier.send.http.port `8084`
+
++ x12.customer.interchange.id `ZZ`
++ x12.customer.id `AnypointStore`
+
++ x12.mock-supplier.interchange.id `ZZ`
++ x12.mock-supplier.id `BestAmazing`
+
+S3 Bucket properties for storing B2B messages
+
++ s3.accessKeyId `2e78dd04b3b5c2932ca5`
++ s3.secretKey `2e78dd042a694e159344b3b5c2932ca5`
++ s3.bucketName `messages-bucket`
++ s3.region `us-west-1`

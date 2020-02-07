@@ -120,7 +120,7 @@
     <dependency>
             <groupId>org.mule.modules</groupId>
             <artifactId>edi-module-x12</artifactId>
-            <version>1.2.2</version>
+            <version>1.4.1</version>
         </dependency>
     <dependency>
             <groupId>com.modus</groupId>
